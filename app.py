@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, flash, redirect, session, g
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
-from forms import UserAddForm, LoginForm, MessageForm
+from forms import UserAddForm, LoginForm, MessageForm, UserEditForm
 from models import db, connect_db, User, Message
 
 CURR_USER_KEY = "curr_user"
@@ -114,6 +114,7 @@ def logout():
     """Handle logout of user."""
     # IMPLEMENT THIS
     do_logout()
+    flash("You have been logged out!")
     return redirect("/login")
 
 
@@ -213,6 +214,23 @@ def profile():
     """Update profile for current user."""
 
     # IMPLEMENT THIS
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    form = UserEditForm(obj=g.user)
+
+    if form.validate_on_submit():
+        if User.authenticate(g.user.username, form.password.data):
+            g.user.username = form.username.data
+            g.user.email = form.email.data
+            g.user.image_url = form.image_url.data or "/static/images/default-pic.png"
+            g.user.header_image_url = form.header_image_url.data or "/static/images/warbler-hero.jpg"
+            g.user.bio = form.bio.data
+            db.session.commit()
+            return redirect (f"/users/{g.user.id}")
+            #the password entered is incorrect this message will flash instead
+        flash("The password you entered was incorrect, please enter the correct password", "danger")
+    return render_template("users/edit.html", form=form, user_id=g.user.id)
 
 
 @app.route('/users/delete', methods=["POST"])
@@ -293,13 +311,15 @@ def homepage():
     """
 
     if g.user:
-        messages = (Message
-                    .query
-                    .order_by(Message.timestamp.desc())
-                    .limit(100)
-                    .all())
+        following_list = [u.id for u in g.user.following]
 
-        return render_template('home.html', messages=messages)
+        messages = (Message.query.filter(Message.user_id.in_(following_list)).order_by(Message.timestamp.desc()).limit(100).all())
+        print('************************************************************************')
+        print(following_list)
+        print('************************************************************************')
+        return render_template('home.html', 
+        messages=messages
+        )
 
     else:
         return render_template('home-anon.html')
