@@ -152,7 +152,8 @@ def users_show(user_id):
                 .order_by(Message.timestamp.desc())
                 .limit(100)
                 .all())
-    return render_template('users/show.html', user=user, messages=messages)
+    likes = [like.id for like in user.likes]
+    return render_template('users/show.html', user=user, messages=messages, likes = likes)
 
 
 @app.route('/users/<int:user_id>/following')
@@ -165,6 +166,28 @@ def show_following(user_id):
 
     user = User.query.get_or_404(user_id)
     return render_template('users/following.html', user=user)
+
+@app.route('/users/<int:user_id>/likes')
+def show_all_likes(user_id):
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    user = User.query.get_or_404(user_id)
+    return render_template('users/likes.html', user=user)
+
+@app.route('/users/add_like/<int:message_id>', methods = ["POST"])
+def add_remove_likes(message_id):
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    liked = Message.query.get_or_404(message_id)
+    user_likes = g.user.likes
+    if liked in user_likes:
+        g.user.likes = [like for like in user_likes if like != liked]
+    else:
+        g.user.likes.append(liked)
+    db.session.commit()
+    return redirect ('/')    
 
 
 @app.route('/users/<int:user_id>/followers')
@@ -311,14 +334,15 @@ def homepage():
     """
 
     if g.user:
-        following_list = [u.id for u in g.user.following]
+        # this gets a list of the IDs of the user and who they are following
+        following_list = [u.id for u in g.user.following] + [g.user.id]
 
+        # this filters all the messages to check if the message IDs are in the following list.
         messages = (Message.query.filter(Message.user_id.in_(following_list)).order_by(Message.timestamp.desc()).limit(100).all())
-        print('************************************************************************')
-        print(following_list)
-        print('************************************************************************')
+        likes = [l.id for l in g.user.likes]
         return render_template('home.html', 
-        messages=messages
+        messages=messages,
+        likes = likes
         )
 
     else:
@@ -335,7 +359,8 @@ def homepage():
 @app.after_request
 def add_header(req):
     """Add non-caching headers on every request."""
-
+    # can't I just put at configs:   
+    #       app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
     req.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     req.headers["Pragma"] = "no-cache"
     req.headers["Expires"] = "0"
