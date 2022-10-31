@@ -38,6 +38,9 @@ class MessageViewTestCase(TestCase):
 
     def setUp(self):
         """Create test client, add sample data."""
+        # first drop all tables and then create them for tests.
+        db.drop_all()
+        db.create_all()
 
         User.query.delete()
         Message.query.delete()
@@ -50,6 +53,11 @@ class MessageViewTestCase(TestCase):
                                     image_url=None)
 
         db.session.commit()
+
+    def tearDown(self):
+        res = super().tearDown()
+        db.session.rollback()
+        return res
 
     def test_add_message(self):
         """Can use add a message?"""
